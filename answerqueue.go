@@ -76,19 +76,18 @@ func (aq *AnswerQueue) Fulfill(ptr Ptr) {
 	close(aq.draining)
 	aq.mu.Unlock()
 
+	lastNonNil := aq.bases[0].recv
 	// Drain queue.
 	for i := range q {
 		ent := &q[i]
 
-		recv := aq.bases[0].recv
+		recv := aq.bases[i].recv
 		if recv == nil {
+			recv = lastNonNil
 			fmt.Println("Hello, this is basic", ent.basis, "for queue", aq.bases, aq.method.String(), ent.Method.String())
-			<-aq.bases[ent.basis].ready
-			recv = aq.bases[ent.basis].recv
-		} else {
-			fmt.Println("Recv is ok", ent.basis, "for queue", aq.bases, aq.method.String(), ent.Method.String())
 		}
 
+		lastNonNil = recv
 		recv(ent.ctx, ent.path, ent.Recv)
 	}
 }

@@ -962,6 +962,7 @@ func (c *Conn) handleCall(ctx context.Context, in transport.IncomingMessage) err
 				fmt.Println("else: set pipeline caller", p.method.String(), pcall, tgt, recv.Method.String())
 
 				dq.Defer(func() {
+					fmt.Println("resolving recv:", p.method.String(), pcall, tgt, recv.Method.String())
 					pcall.resolve(tgt.PipelineRecv(callCtx, p.target.transform, recv))
 					tgtAns.pcalls.Done()
 				})
