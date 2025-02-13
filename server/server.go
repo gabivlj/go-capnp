@@ -188,11 +188,12 @@ func (srv *Server) handleCalls() {
 func (srv *Server) handleCall(c *Call) {
 	defer srv.wg.Done()
 
+	fmt.Println("Call to be handled is", c.method.String(), c.srv.String())
 	err := c.method.Impl(c.ctx, c)
+	fmt.Println("Call handled", c.method.String(), c.srv.String())
 
 	c.recv.ReleaseArgs()
 	c.recv.Returner.PrepareReturn(err)
-	fmt.Println("Call to be handled is", c.method.String(), c.srv.String())
 	if err == nil {
 		c.aq.Fulfill(c.results.ToPtr())
 	} else {

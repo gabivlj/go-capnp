@@ -151,7 +151,7 @@ func (qc queueCaller) PipelineRecv(ctx context.Context, transform []PipelineOp, 
 		return b.recv(ctx, transform, r)
 	}
 
-	fmt.Println("Queuing", transform, r.Method.String(), qc.basis)
+	fmt.Println("Queuing on", qc.aq.method.String(), "the method", r.Method.String(), qc.basis)
 	// Enqueue.
 	qc.aq.q = append(qc.aq.q, qent{
 		ctx:   ctx,

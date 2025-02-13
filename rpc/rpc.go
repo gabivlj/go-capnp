@@ -883,6 +883,7 @@ func (c *Conn) handleCall(ctx context.Context, in transport.IncomingMessage) err
 			callCtx, ans.cancel = context.WithCancel(c.bgctx)
 			pcall := newPromisedPipelineCaller()
 			ans.setPipelineCaller(p.method, pcall)
+			fmt.Println("called which imported cap", ans, p.method, ent.snapshot.String())
 			dq.Defer(func() {
 				pcall.resolve(ent.snapshot.Recv(callCtx, recv))
 			})
@@ -967,7 +968,7 @@ func (c *Conn) handleCall(ctx context.Context, in transport.IncomingMessage) err
 				fmt.Println("else: set pipeline caller", p.method.String(), pcall, tgt, recv.Method.String())
 
 				dq.Defer(func() {
-					fmt.Println("resolving recv:", p.method.String(), pcall, tgt, recv.Method.String(), tgt)
+					fmt.Println("else: resolving recv:", p.method.String(), pcall, tgt, recv.Method.String(), tgt)
 					newCaller := tgt.PipelineRecv(callCtx, p.target.transform, recv)
 					pcall.resolve(newCaller)
 					tgtAns.pcalls.Done()
