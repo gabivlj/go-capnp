@@ -80,7 +80,7 @@ func (aq *AnswerQueue) Fulfill(ptr Ptr) {
 	for i := range q {
 		ent := &q[i]
 
-		recv := aq.bases[ent.basis].recv
+		recv := aq.bases[0].recv
 		if recv == nil {
 			fmt.Println("Hello, this is basic", ent.basis, "for queue", aq.bases, aq.method.String(), ent.Method.String())
 			<-aq.bases[ent.basis].ready
