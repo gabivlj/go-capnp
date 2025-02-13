@@ -958,10 +958,9 @@ func (c *Conn) handleCall(ctx context.Context, in transport.IncomingMessage) err
 				tgt := tgtAns.pcall
 				c.tasks.Add(1) // will be finished by answer.Return
 				pcall := newPromisedPipelineCaller()
-				ans.setPipelineCaller(p.method, pcall)
+				tgtAns.setPipelineCaller(p.method, pcall)
 				fmt.Println("else: set pipeline caller", p.method.String(), pcall, tgt, recv.Method.String())
 
-				<-tgtAns.promise.Answer().Done()
 				dq.Defer(func() {
 					fmt.Println("resolving recv:", p.method.String(), pcall, tgt, recv.Method.String(), tgt)
 					pcall.resolve(tgt.PipelineRecv(callCtx, p.target.transform, recv))
