@@ -87,7 +87,11 @@ func (aq *AnswerQueue) Fulfill(ptr Ptr) {
 			fmt.Println("Hello, this is basic", ent.basis, "for queue", aq.bases, aq.method.String(), ent.Method.String())
 		}
 
-		lastNonNil = recv(ent.ctx, ent.path, ent.Recv).PipelineRecv
+		newRecv := recv(ent.ctx, ent.path, ent.Recv).PipelineRecv
+		if newRecv != nil {
+			fmt.Println("Updating with newRecv")
+			lastNonNil = newRecv
+		}
 	}
 }
 
