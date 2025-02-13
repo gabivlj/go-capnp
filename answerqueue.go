@@ -60,6 +60,7 @@ func NewAnswerQueue(m Method) *AnswerQueue {
 // pointer.  After fulfill returns, pipeline calls will be immediately
 // delivered instead of being queued.
 func (aq *AnswerQueue) Fulfill(ptr Ptr) {
+	fmt.Println("Fulfill called", ptr, aq.method.String())
 	// Enter draining state.
 	aq.mu.Lock()
 	q := aq.q
@@ -73,27 +74,23 @@ func (aq *AnswerQueue) Fulfill(ptr Ptr) {
 
 	aq.bases[0].recv = ImmediateAnswer(aq.method, ptr).PipelineRecv
 	close(aq.draining)
+	aq.mu.Unlock()
 
-	whereItBroke := -1
 	// Drain queue.
 	for i := range q {
 		ent := &q[i]
 
 		recv := aq.bases[ent.basis].recv
 		if recv == nil {
-			whereItBroke = i
-			break
+			fmt.Println("Hello, this is basic", ent.basis, "for queue", aq.bases, aq.method.String(), ent.Method.String())
+			<-aq.bases[ent.basis].ready
+			recv = aq.bases[ent.basis].recv
+		} else {
+			fmt.Println("Recv is ok", ent.basis, "for queue", aq.bases, aq.method.String(), ent.Method.String())
 		}
 
 		recv(ent.ctx, ent.path, ent.Recv)
 	}
-
-	if whereItBroke != -1 {
-		fmt.Println("So broken", whereItBroke, aq.method.String(), "in", q[whereItBroke].Method.String())
-		aq.q = q[whereItBroke:]
-	}
-
-	aq.mu.Unlock()
 }
 
 // Reject empties the queue, returning errors on all the method calls.
@@ -154,6 +151,8 @@ func (qc queueCaller) PipelineRecv(ctx context.Context, transform []PipelineOp, 
 		}
 		return b.recv(ctx, transform, r)
 	}
+
+	fmt.Println("Queuing", transform, r.Method.String(), qc.basis)
 	// Enqueue.
 	qc.aq.q = append(qc.aq.q, qent{
 		ctx:   ctx,
