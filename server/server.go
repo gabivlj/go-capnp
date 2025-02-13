@@ -115,7 +115,7 @@ func New(methods []Method, brand any, shutdown Shutdowner) *Server {
 		shutdown:  shutdown,
 		callQueue: mpsc.New[*Call](),
 	}
-	fmt.Println("Lets see...")
+	fmt.Println("Lets see...", methods, brand)
 	copy(srv.methods, methods)
 	sort.Sort(srv.methods)
 	go srv.handleCalls()
@@ -192,6 +192,7 @@ func (srv *Server) handleCall(c *Call) {
 
 	c.recv.ReleaseArgs()
 	c.recv.Returner.PrepareReturn(err)
+	fmt.Println("Call to be handled is", c.method.String(), c.srv.String())
 	if err == nil {
 		c.aq.Fulfill(c.results.ToPtr())
 	} else {

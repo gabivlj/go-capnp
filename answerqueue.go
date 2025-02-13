@@ -3,6 +3,7 @@ package capnp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"capnproto.org/go/capnp/v3/exc"
@@ -77,6 +78,11 @@ func (aq *AnswerQueue) Fulfill(ptr Ptr) {
 	for i := range q {
 		ent := &q[i]
 		recv := aq.bases[ent.basis].recv
+		if recv == nil {
+			fmt.Println("recv is NIL")
+			continue
+		}
+
 		recv(ent.ctx, ent.path, ent.Recv)
 	}
 }
