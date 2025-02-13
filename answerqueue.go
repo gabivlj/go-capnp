@@ -74,27 +74,26 @@ func (aq *AnswerQueue) Fulfill(ptr Ptr) {
 
 	aq.bases[0].recv = ImmediateAnswer(aq.method, ptr).PipelineRecv
 	close(aq.draining)
-	aq.mu.Unlock()
 
+	whereItBroke := -1
 	// Drain queue.
 	for i := range q {
 		ent := &q[i]
 
 		recv := aq.bases[ent.basis].recv
-		for recv == nil {
-			recv = aq.bases[ent.basis].recv
-			time.Sleep(time.Second * 1)
-			fmt.Println("RECV IS STILL NOT DONE")
-			select {
-			case <-ent.ctx.Done():
-				return
-			default:
-			}
+		if recv == nil {
+			whereItBroke = i
+			break
 		}
 
 		recv(ent.ctx, ent.path, ent.Recv)
 	}
 
+	if whereItBroke != -1 {
+		aq.q = q[whereItBroke:]
+	}
+
+	aq.mu.Unlock()
 }
 
 // Reject empties the queue, returning errors on all the method calls.
