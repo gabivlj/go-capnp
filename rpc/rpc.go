@@ -889,6 +889,11 @@ func (c *Conn) handleCall(ctx context.Context, in transport.IncomingMessage) err
 			return nil
 		case rpccp.MessageTarget_Which_promisedAnswer:
 			tgtAns := c.lk.answers[p.target.promisedAnswer]
+			fmt.Println("Answers")
+			for k, v := range c.lk.answers {
+				fmt.Println("Answer", k, "=", v.flags)
+			}
+
 			if tgtAns == nil || tgtAns.flags.Contains(finishReceived) {
 				ans.returner.ret = rpccp.Return{}
 				ans.sendMsg = nil
@@ -958,12 +963,13 @@ func (c *Conn) handleCall(ctx context.Context, in transport.IncomingMessage) err
 				tgt := tgtAns.pcall
 				c.tasks.Add(1) // will be finished by answer.Return
 				pcall := newPromisedPipelineCaller()
-				tgtAns.setPipelineCaller(p.method, pcall)
+				ans.setPipelineCaller(p.method, pcall)
 				fmt.Println("else: set pipeline caller", p.method.String(), pcall, tgt, recv.Method.String())
 
 				dq.Defer(func() {
 					fmt.Println("resolving recv:", p.method.String(), pcall, tgt, recv.Method.String(), tgt)
-					pcall.resolve(tgt.PipelineRecv(callCtx, p.target.transform, recv))
+					newCaller := tgt.PipelineRecv(callCtx, p.target.transform, recv)
+					pcall.resolve(newCaller)
 					tgtAns.pcalls.Done()
 				})
 			}

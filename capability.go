@@ -116,7 +116,7 @@ type ClientKind = struct {
 }
 
 type client struct {
-	state mutex.Mutex[clientState]
+	state *mutex.Mutex[clientState]
 }
 
 type clientState struct {
@@ -137,7 +137,7 @@ type clientState struct {
 // chain of clientHooks. Places that need to do path shortening should
 // store one of these, rather than storing clientHook directly.
 type clientCursor struct {
-	hook mutex.Mutex[*rc.Ref[clientHook]] // nil if resolved to nil or released
+	hook *mutex.Mutex[*rc.Ref[clientHook]] // nil if resolved to nil or released
 }
 
 func newClientCursor(hook clientHook) *rc.Ref[clientCursor] {
@@ -146,7 +146,8 @@ func newClientCursor(hook clientHook) *rc.Ref[clientCursor] {
 		return h.Release
 	})
 	return rc.NewRefInPlace(func(c *clientCursor) func() {
-		*c = clientCursor{hook: mutex.New(hookRef)}
+		m := mutex.New(hookRef)
+		*c = clientCursor{hook: &m}
 		return c.Release
 	})
 }
@@ -195,7 +196,7 @@ type clientHook struct {
 	ClientHook
 
 	// Place for callers to attach arbitrary metadata to the client.
-	metadata Metadata
+	metadata *Metadata
 
 	// State of the promise's resolution. If this is absent, then
 	// this clientHook is not a promise.
@@ -233,10 +234,10 @@ func NewClient(hook ClientHook) Client {
 	}
 	h := clientHook{
 		ClientHook: hook,
-		metadata:   *NewMetadata(),
+		metadata:   NewMetadata(),
 	}
 	cs := mutex.New(clientState{cursor: newClientCursor(h)})
-	c := Client{client: &client{state: cs}}
+	c := Client{client: &client{state: &cs}}
 	setupLeakReporting(c)
 	return c
 }
@@ -263,11 +264,11 @@ func newPromisedClient(hook ClientHook) (Client, *clientPromise) {
 	})
 	cursor := newClientCursor(clientHook{
 		ClientHook: hook,
-		metadata:   *NewMetadata(),
+		metadata:   NewMetadata(),
 		resolution: maybe.New(&rs),
 	})
 	cs := mutex.New(clientState{cursor: cursor})
-	c := Client{client: &client{state: cs}}
+	c := Client{client: &client{state: &cs}}
 	setupLeakReporting(c)
 	return c, &clientPromise{cursor: cursor.Weak()}
 }
@@ -279,12 +280,12 @@ func (c Client) startCall() (hook *rc.Ref[clientHook], resolved, released bool) 
 	if c.client == nil {
 		return nil, true, false
 	}
-	return mutex.With3(&c.state, func(c *clientState) (hook *rc.Ref[clientHook], resolved, released bool) {
+	return mutex.With3(c.state, func(c *clientState) (hook *rc.Ref[clientHook], resolved, released bool) {
 		if c.released || !c.cursor.IsValid() {
 			return nil, true, c.released
 		}
 		c.cursor.Value().compress()
-		hook, ok := mutex.With2(&c.cursor.Value().hook, func(h **rc.Ref[clientHook]) (*rc.Ref[clientHook], bool) {
+		hook, ok := mutex.With2(c.cursor.Value().hook, func(h **rc.Ref[clientHook]) (*rc.Ref[clientHook], bool) {
 			ret := *h
 			if ret.IsValid() {
 				return ret.AddRef(), true
@@ -308,7 +309,7 @@ func (c Client) startCall() (hook *rc.Ref[clientHook], resolved, released bool) 
 // Get the current flowcontrol.FlowLimiter used to manage flow control
 // for this client.
 func (c Client) GetFlowLimiter() flowcontrol.FlowLimiter {
-	return mutex.With1(&c.state, func(c *clientState) flowcontrol.FlowLimiter {
+	return mutex.With1(c.state, func(c *clientState) flowcontrol.FlowLimiter {
 		ret := c.limiter
 		if ret == nil {
 			ret = flowcontrol.NopLimiter
@@ -347,7 +348,7 @@ func (c Client) SendCall(ctx context.Context, s Send) (*Answer, ReleaseFunc) {
 		return ErrorAnswer(s.Method, errors.New("call on null client")), func() {}
 	}
 
-	err := mutex.With1(&c.state, func(c *clientState) error {
+	err := mutex.With1(c.state, func(c *clientState) error {
 		return c.stream.err
 	})
 
@@ -422,7 +423,7 @@ func (c Client) SendCall(ctx context.Context, s Send) (*Answer, ReleaseFunc) {
 //     client will return the same error (without starting
 //     the method or calling PlaceArgs).
 func (c Client) SendStreamCall(ctx context.Context, s Send) error {
-	streamError := mutex.With1(&c.state, func(c *clientState) error {
+	streamError := mutex.With1(c.state, func(c *clientState) error {
 		err := c.stream.err
 		if err == nil {
 			c.stream.wg.Add(1)
@@ -452,11 +453,11 @@ func (c Client) SendStreamCall(ctx context.Context, s Send) error {
 // started with SendStreamCall) to complete, and then returns an error
 // if any streaming call has failed.
 func (c Client) WaitStreaming() error {
-	wg := mutex.With1(&c.state, func(c *clientState) *sync.WaitGroup {
+	wg := mutex.With1(c.state, func(c *clientState) *sync.WaitGroup {
 		return &c.stream.wg
 	})
 	wg.Wait()
-	return mutex.With1(&c.state, func(c *clientState) error {
+	return mutex.With1(c.state, func(c *clientState) error {
 		return c.stream.err
 	})
 }
@@ -546,8 +547,9 @@ func (c Client) AddRef() Client {
 	if released {
 		panic("AddRef on released client")
 	}
-	return mutex.With1(&c.state, func(c *clientState) Client {
-		d := Client{client: &client{state: mutex.New(clientState{cursor: c.cursor.AddRef()})}}
+	return mutex.With1(c.state, func(c *clientState) Client {
+		m := mutex.New(clientState{cursor: c.cursor.AddRef()})
+		d := Client{client: &client{state: &m}}
 		setupLeakReporting(d)
 		return d
 	})
@@ -556,7 +558,7 @@ func (c Client) AddRef() Client {
 // WeakRef creates a new WeakClient that refers to the same capability
 // as c.  If c is nil or has resolved to null, then WeakRef returns nil.
 func (c Client) WeakRef() WeakClient {
-	cursor := mutex.With1(&c.state, func(s *clientState) *rc.WeakRef[clientCursor] {
+	cursor := mutex.With1(c.state, func(s *clientState) *rc.WeakRef[clientCursor] {
 		if s.released {
 			panic("WeakRef on released client")
 		}
@@ -657,12 +659,14 @@ func (cs ClientSnapshot) Recv(ctx context.Context, r Recv) PipelineCaller {
 // Client returns a client pointing at the most-resolved version of the snapshot.
 func (cs ClientSnapshot) Client() Client {
 	cursor := rc.NewRefInPlace(func(c *clientCursor) func() {
-		*c = clientCursor{hook: mutex.New(cs.hook.AddRef())}
+		m := mutex.New(cs.hook.AddRef())
+		*c = clientCursor{hook: &m}
 		c.compress()
 		return c.Release
 	})
+	m := mutex.New(clientState{cursor: cursor})
 	c := Client{client: &client{
-		state: mutex.New(clientState{cursor: cursor}),
+		state: &m,
 	}}
 	setupLeakReporting(c)
 	return c
@@ -680,7 +684,7 @@ func (cs ClientSnapshot) Brand() Brand {
 // Return a the reference to the Metadata associated with this client hook.
 // Callers may store whatever they need here.
 func (cs ClientSnapshot) Metadata() *Metadata {
-	return &cs.hook.Value().metadata
+	return cs.hook.Value().metadata
 }
 
 // Create a copy of the snapshot, with its own underlying reference.
@@ -846,7 +850,7 @@ func SetClientLeakFunc(clientLeakFunc func(msg string)) {
 		switch c := v.(type) {
 		case Client:
 			runtime.SetFinalizer(c.client, func(c *client) {
-				released := mutex.With1(&c.state, func(c *clientState) bool {
+				released := mutex.With1(c.state, func(c *clientState) bool {
 					return c.released
 				})
 				if released {
@@ -945,7 +949,8 @@ func (wc WeakClient) AddRef() (c Client, ok bool) {
 	if !ok {
 		return Client{}, false
 	}
-	c = Client{client: &client{state: mutex.New(clientState{cursor: cursor})}}
+	m := mutex.New(clientState{cursor: cursor})
+	c = Client{client: &client{state: &m}}
 	setupLeakReporting(c)
 	return c, true
 }
@@ -1144,10 +1149,10 @@ func ErrorClient(e error) Client {
 	// Avoid NewClient because it can set a finalizer.
 	h := clientHook{
 		ClientHook: errorClient{e},
-		metadata:   *NewMetadata(),
+		metadata:   NewMetadata(),
 	}
 	cs := mutex.New(clientState{cursor: newClientCursor(h)})
-	return Client{client: &client{state: cs}}
+	return Client{client: &client{state: &cs}}
 }
 
 func (ec errorClient) Send(_ context.Context, s Send) (*Answer, ReleaseFunc) {
