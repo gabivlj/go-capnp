@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"capnproto.org/go/capnp/v3/exc"
 )
@@ -78,10 +79,17 @@ func (aq *AnswerQueue) Fulfill(ptr Ptr) {
 	// Drain queue.
 	for i := range q {
 		ent := &q[i]
+
 		recv := aq.bases[ent.basis].recv
-		if recv == nil {
-			fmt.Println("recv is NIL -- ", aq.method.String(), ent.Method.String())
-			<-aq.bases[ent.basis].ready
+		for recv == nil {
+			recv = aq.bases[ent.basis].recv
+			time.Sleep(time.Second * 1)
+			fmt.Println("RECV IS STILL NOT DONE")
+			select {
+			case <-ent.ctx.Done():
+				return
+			default:
+			}
 		}
 
 		recv(ent.ctx, ent.path, ent.Recv)
