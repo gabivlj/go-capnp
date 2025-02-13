@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	"capnproto.org/go/capnp/v3/exc"
 )
@@ -90,6 +89,7 @@ func (aq *AnswerQueue) Fulfill(ptr Ptr) {
 	}
 
 	if whereItBroke != -1 {
+		fmt.Println("So broken", whereItBroke, aq.method.String(), "in", q[whereItBroke].Method.String())
 		aq.q = q[whereItBroke:]
 	}
 
