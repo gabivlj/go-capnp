@@ -4,6 +4,7 @@ package server // import "capnproto.org/go/capnp/v3/server"
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 
@@ -114,6 +115,7 @@ func New(methods []Method, brand any, shutdown Shutdowner) *Server {
 		shutdown:  shutdown,
 		callQueue: mpsc.New[*Call](),
 	}
+	fmt.Println("Lets see...")
 	copy(srv.methods, methods)
 	sort.Sort(srv.methods)
 	go srv.handleCalls()
