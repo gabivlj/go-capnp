@@ -78,7 +78,8 @@ func (aq *AnswerQueue) Fulfill(ptr Ptr) {
 		ent := &q[i]
 		recv := aq.bases[ent.basis].recv
 		if recv == nil {
-			fmt.Println("recv is NIL", aq.method.String())
+			fmt.Println("recv is NIL", aq.method.String(), ent.Method.String())
+			<-aq.bases[ent.basis].ready
 		}
 
 		recv(ent.ctx, ent.path, ent.Recv)
