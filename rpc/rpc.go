@@ -587,6 +587,7 @@ func (c *Conn) receive(ctx context.Context) func() error {
 				return nil
 			}
 
+			fmt.Println("Received message =", in.Message().Which().String())
 			switch in.Message().Which() {
 			case rpccp.Message_Which_unimplemented:
 				if err := c.handleUnimplemented(in); err != nil {
@@ -943,6 +944,7 @@ func (c *Conn) handleCall(ctx context.Context, in transport.IncomingMessage) err
 				var callCtx context.Context
 				callCtx, ans.cancel = context.WithCancel(c.bgctx)
 				pcall := newPromisedPipelineCaller()
+				fmt.Println("set pipeline caller", p.method.String(), pcall, p.target.which.String())
 				ans.setPipelineCaller(p.method, pcall)
 				dq.Defer(func() {
 					defer tgt.Release()
@@ -957,6 +959,8 @@ func (c *Conn) handleCall(ctx context.Context, in transport.IncomingMessage) err
 				c.tasks.Add(1) // will be finished by answer.Return
 				pcall := newPromisedPipelineCaller()
 				ans.setPipelineCaller(p.method, pcall)
+				fmt.Println("else: set pipeline caller", p.method.String(), pcall, p.target.which.String())
+
 				dq.Defer(func() {
 					pcall.resolve(tgt.PipelineRecv(callCtx, p.target.transform, recv))
 					tgtAns.pcalls.Done()
