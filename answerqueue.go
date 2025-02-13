@@ -56,6 +56,10 @@ func NewAnswerQueue(m Method) *AnswerQueue {
 	}
 }
 
+func (a *AnswerQueue) Method() *Method {
+	return &a.method
+}
+
 // Fulfill empties the queue, delivering the method calls on the given
 // pointer.  After fulfill returns, pipeline calls will be immediately
 // delivered instead of being queued.

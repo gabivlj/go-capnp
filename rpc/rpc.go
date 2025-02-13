@@ -775,6 +775,7 @@ func (c *Conn) handleCall(ctx context.Context, in transport.IncomingMessage) err
 	defer dq.Run()
 
 	id := answerID(call.QuestionId())
+	fmt.Println("Handling call, its asking for", id, "of method", fmt.Sprintf("%x", call.MethodId()))
 
 	// TODO(3rd-party handshake): support sending results to 3rd party vat
 	if call.SendResultsTo().Which() != rpccp.Call_sendResultsTo_Which_caller {
@@ -968,8 +969,10 @@ func (c *Conn) handleCall(ctx context.Context, in transport.IncomingMessage) err
 				ans.setPipelineCaller(p.method, pcall)
 				fmt.Println("else: set pipeline caller", p.method.String(), pcall, tgt, recv.Method.String())
 
+				tgtAns.returner.results.Content()
+
 				dq.Defer(func() {
-					fmt.Println("else: resolving recv:", p.method.String(), pcall, tgt, recv.Method.String(), tgt)
+					fmt.Println("else: resolving recv:", tgtAns.returner.id, p.method.String(), pcall, tgt, recv.Method.String(), tgt)
 					newCaller := tgt.PipelineRecv(callCtx, p.target.transform, recv)
 					pcall.resolve(newCaller)
 					tgtAns.pcalls.Done()
@@ -1023,7 +1026,7 @@ func (p *promisedPipelineCaller) PipelineRecv(
 	r capnp.Recv,
 ) capnp.PipelineCaller {
 	<-p.ready
-	fmt.Println("PipelineRecv called with underlying PipelineRecv", r.Method, p.underlying)
+	fmt.Println("PipelineRecv called with underlying PipelineRecv", r.Method.String(), p.underlying)
 	return p.underlying.PipelineRecv(ctx, transform, r)
 }
 
