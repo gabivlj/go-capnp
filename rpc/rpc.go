@@ -954,7 +954,8 @@ func (c *Conn) handleCall(ctx context.Context, in transport.IncomingMessage) err
 				ans.setPipelineCaller(p.method, pcall)
 				dq.Defer(func() {
 					defer tgt.Release()
-					pcall.resolve(tgt.Recv(callCtx, recv))
+					r := tgt.Recv(callCtx, recv)
+					pcall.resolve(r)
 				})
 			} else {
 				// Results not ready, use pipeline caller.
@@ -1022,6 +1023,7 @@ func (p *promisedPipelineCaller) PipelineRecv(
 	r capnp.Recv,
 ) capnp.PipelineCaller {
 	<-p.ready
+	fmt.Println("PipelineRecv called with underlying PipelineRecv", r.Method, p.underlying)
 	return p.underlying.PipelineRecv(ctx, transform, r)
 }
 
