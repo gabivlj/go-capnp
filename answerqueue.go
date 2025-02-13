@@ -70,8 +70,10 @@ func (aq *AnswerQueue) Fulfill(ptr Ptr) {
 	for i := range aq.bases {
 		aq.bases[i].ready = ready
 	}
+
 	aq.bases[0].recv = ImmediateAnswer(aq.method, ptr).PipelineRecv
 	close(aq.draining)
+	aq.mu.Unlock()
 
 	// Drain queue.
 	for i := range q {
@@ -85,7 +87,6 @@ func (aq *AnswerQueue) Fulfill(ptr Ptr) {
 		recv(ent.ctx, ent.path, ent.Recv)
 	}
 
-	aq.mu.Unlock()
 }
 
 // Reject empties the queue, returning errors on all the method calls.
