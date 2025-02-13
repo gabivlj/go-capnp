@@ -944,7 +944,7 @@ func (c *Conn) handleCall(ctx context.Context, in transport.IncomingMessage) err
 				var callCtx context.Context
 				callCtx, ans.cancel = context.WithCancel(c.bgctx)
 				pcall := newPromisedPipelineCaller()
-				fmt.Println("set pipeline caller", p.method.String(), pcall, p.target.which.String())
+				fmt.Println("set pipeline caller", p.method.String(), pcall, p.target.which.String(), recv.Method.String())
 				ans.setPipelineCaller(p.method, pcall)
 				dq.Defer(func() {
 					defer tgt.Release()
@@ -959,7 +959,7 @@ func (c *Conn) handleCall(ctx context.Context, in transport.IncomingMessage) err
 				c.tasks.Add(1) // will be finished by answer.Return
 				pcall := newPromisedPipelineCaller()
 				ans.setPipelineCaller(p.method, pcall)
-				fmt.Println("else: set pipeline caller", p.method.String(), pcall, p.target.which.String())
+				fmt.Println("else: set pipeline caller", p.method.String(), pcall, tgt, recv.Method.String())
 
 				dq.Defer(func() {
 					pcall.resolve(tgt.PipelineRecv(callCtx, p.target.transform, recv))
