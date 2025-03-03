@@ -3,12 +3,15 @@ package rpc_test
 import (
 	"context"
 	"net"
+	"sync"
 	"testing"
+	"time"
 
 	"capnproto.org/go/capnp/v3"
 	"capnproto.org/go/capnp/v3/rpc"
 	"capnproto.org/go/capnp/v3/rpc/internal/testcapnp"
 	"capnproto.org/go/capnp/v3/rpc/transport"
+	"github.com/stretchr/testify/require"
 )
 
 // TestRejectOnDisconnect verifies that, when a connection is dropped, outstanding calls
@@ -57,4 +60,78 @@ func (s dropPingServer) EchoNum(ctx context.Context, p testcapnp.PingPong_echoNu
 	close(s.readyCh)
 	<-ctx.Done()
 	return nil
+}
+
+func TestReleaseCapabilityTriggersShutdown(t *testing.T) {
+	clientPipe, server := net.Pipe()
+	clientConnectedCh := make(chan struct{}, 1)
+	releaseWasCalledCh := make(chan struct{}, 1)
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+	readyCh := make(chan struct{})
+	finished := make(chan struct{})
+
+	go func() {
+		defer wg.Done()
+		bootstrapClient := testcapnp.PingPong_ServerToClient(dropPingServer{
+			readyCh: readyCh,
+		})
+
+		conn := rpc.NewConn(rpc.NewStreamTransport(server), &rpc.Options{
+			BootstrapClient: capnp.Client(bootstrapClient),
+		})
+		defer conn.Close()
+
+		select {
+		case <-clientConnectedCh:
+			bootstrapClient.Release()
+			releaseWasCalledCh <- struct{}{}
+			bootstrapClient.WaitStreaming()
+
+			// fake sleep, to just prove the bug
+			time.Sleep(time.Second)
+
+			select {
+			case <-finished:
+			case <-readyCh:
+				t.Error("Ready channel was hit, when we released cap")
+			}
+		case <-conn.Done():
+			t.Failed()
+		}
+
+		select {
+		case <-readyCh:
+			t.Fail()
+		default:
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		conn := rpc.NewConn(rpc.NewStreamTransport(clientPipe), nil)
+		defer conn.Close()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		client := testcapnp.PingPong(conn.Bootstrap(ctx))
+		defer client.Release()
+
+		if err := client.Resolve(ctx); err != nil {
+			require.NoError(t, err)
+		}
+
+		clientConnectedCh <- struct{}{}
+		<-releaseWasCalledCh
+
+		future, release := client.EchoNum(ctx, nil)
+		defer release()
+		_, err := future.Struct()
+		require.Error(t, err)
+		close(finished)
+	}()
+
+	wg.Wait()
 }
